@@ -108,6 +108,13 @@
             box-shadow: 0 4px 12px rgba(22, 93, 255, 0.3);
         }
 
+        .action-btn:disabled {
+            background-color: #334155;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         /* 右侧输出区域样式 */
         .output-section {
             display: flex;
@@ -166,6 +173,22 @@
             font-size: 1.1rem;
             font-weight: 600;
             box-shadow: 0 0 15px rgba(22, 93, 255, 0.4);
+        }
+
+        /* 加载动画样式 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         /* 响应式布局 - 屏幕宽度小于1200px时改为上下布局 */
@@ -252,9 +275,7 @@
 
     <script>
         // ========== 配置项 ==========
-        const API_KEY = 'sk-0974d18972c543419b645f6dfbf278cb'; // 你的API密钥
-        const API_URL = 'https://api.openai.com/v1/chat/completions'; // OpenAI API地址（可根据实际接口修改）
-        const MODEL = 'gpt-3.5-turbo'; // 使用的模型
+        const API_BASE_URL = 'http://localhost:5000'; // 后端服务地址
 
         // ========== DOM元素获取 ==========
         const inspirationInput = document.getElementById('inspiration-input');
@@ -268,38 +289,50 @@
         const copyContentBtn = document.getElementById('copy-content');
         const downloadTxtBtn = document.getElementById('download-txt');
 
-        // ========== 通用AI调用函数 ==========
+        // ========== 工具函数 ==========
         /**
-         * 调用AI API生成内容
-         * @param {string} prompt 提示词
-         * @returns {Promise<string>} AI生成的内容
+         * 设置按钮加载状态
+         * @param {HTMLElement} btn - 按钮元素
+         * @param {boolean} isLoading - 是否加载中
+         * @param {string} originalText - 按钮原始文本
          */
-        async function callAIApi(prompt) {
-            const requestBody = {
-                model: MODEL,
-                messages: [
-                    { role: 'system', content: '你是一个专业的小说创作助手，擅长写各种风格的小说内容，语言优美，情节生动，符合中文阅读习惯。' },
-                    { role: 'user', content: prompt }
-                ],
-                temperature: 0.8, // 创作自由度，0-1之间，越高越有创意
-                max_tokens: 1000 // 最大生成字数
-            };
+        function setButtonLoading(btn, isLoading, originalText) {
+            if (isLoading) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="loading"></span>${originalText}`;
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
 
-            const response = await fetch(API_URL, {
+        /**
+         * 调用AI生成接口
+         * @param {string} actionType - 生成类型
+         * @returns {Promise<string>} 生成的内容
+         */
+        async function callAIApi(actionType) {
+            const inputText = inspirationInput.value.trim();
+            const outputText = novelOutput.value.trim();
+
+            // 发送请求
+            const response = await fetch(`${API_BASE_URL}/generate_novel`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${API_KEY}`
                 },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify({
+                    action_type: actionType,
+                    input_text: inputText,
+                    output_text: outputText
+                })
             });
 
-            if (!response.ok) {
-                throw new Error(`API请求失败：${response.status} ${response.statusText}`);
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.message || '生成失败，请重试');
             }
-
-            const data = await response.json();
-            return data.choices[0].message.content.trim();
+            return result.content;
         }
 
         // ========== 核心功能函数 ==========
@@ -312,15 +345,19 @@
                 alert('请先输入故事灵感！');
                 return;
             }
-            
+
+            const originalText = '<i class="fas fa-feather-alt"></i> 生成精彩开头';
+            setButtonLoading(generateBeginningBtn, true, originalText);
             novelOutput.value = 'AI正在生成精彩开头...请稍候...';
+
             try {
-                const prompt = `请根据以下灵感，生成一个精彩的小说开头（300-500字），语言生动，有画面感，能够吸引读者：\n\n${inputText}`;
-                const result = await callAIApi(prompt);
-                novelOutput.value = `【精彩开头】\n\n${result}`;
+                const content = await callAIApi('beginning');
+                novelOutput.value = `【精彩开头】\n\n${content}`;
             } catch (error) {
                 novelOutput.value = `生成失败！错误信息：${error.message}`;
                 console.error('生成开头失败：', error);
+            } finally {
+                setButtonLoading(generateBeginningBtn, false, originalText);
             }
         }
 
@@ -334,15 +371,19 @@
                 alert('请先输入故事灵感并生成开头后，再进行续写！');
                 return;
             }
-            
+
+            const originalText = '<i class="fas fa-scroll"></i> 续写后续情节';
+            setButtonLoading(continuePlotBtn, true, originalText);
             novelOutput.value = 'AI正在续写后续情节...请稍候...';
+
             try {
-                const prompt = `请根据以下故事灵感和已有的开头内容，续写后续情节（400-600字），情节连贯，符合逻辑，有吸引力：\n\n【故事灵感】\n${inputText}\n\n【已有内容】\n${outputText}\n\n【续写要求】保持风格统一，推进剧情发展`;
-                const result = await callAIApi(prompt);
-                novelOutput.value += `\n\n【后续情节】\n\n${result}`;
+                const content = await callAIApi('continue');
+                novelOutput.value = `${outputText}\n\n【后续情节】\n\n${content}`;
             } catch (error) {
                 novelOutput.value = `续写失败！错误信息：${error.message}`;
                 console.error('续写情节失败：', error);
+            } finally {
+                setButtonLoading(continuePlotBtn, false, originalText);
             }
         }
 
@@ -355,15 +396,19 @@
                 alert('请先输入故事灵感！');
                 return;
             }
-            
+
+            const originalText = '<i class="fas fa-users"></i> 生成人物设定';
+            setButtonLoading(generateCharactersBtn, true, originalText);
             novelOutput.value = 'AI正在生成人物设定...请稍候...';
+
             try {
-                const prompt = `请根据以下故事灵感，生成详细的人物设定（至少3个主要角色），包括姓名、年龄、外貌、性格、能力、人物关系等，每个角色描述清晰具体：\n\n${inputText}`;
-                const result = await callAIApi(prompt);
-                novelOutput.value = `【人物设定】\n\n${result}`;
+                const content = await callAIApi('characters');
+                novelOutput.value = `【人物设定】\n\n${content}`;
             } catch (error) {
                 novelOutput.value = `生成人物设定失败！错误信息：${error.message}`;
                 console.error('生成人物失败：', error);
+            } finally {
+                setButtonLoading(generateCharactersBtn, false, originalText);
             }
         }
 
@@ -376,15 +421,19 @@
                 alert('请先输入故事灵感！');
                 return;
             }
-            
+
+            const originalText = '<i class="fas fa-star"></i> 构思剧情爽点';
+            setButtonLoading(plotHighlightsBtn, true, originalText);
             novelOutput.value = 'AI正在构思剧情爽点...请稍候...';
+
             try {
-                const prompt = `请根据以下故事灵感，构思至少4个剧情爽点，每个爽点要有具体的场景和情节描述，符合网文读者的阅读喜好：\n\n${inputText}`;
-                const result = await callAIApi(prompt);
-                novelOutput.value = `【剧情爽点构思】\n\n${result}`;
+                const content = await callAIApi('highlights');
+                novelOutput.value = `【剧情爽点构思】\n\n${content}`;
             } catch (error) {
                 novelOutput.value = `构思爽点失败！错误信息：${error.message}`;
                 console.error('构思爽点失败：', error);
+            } finally {
+                setButtonLoading(plotHighlightsBtn, false, originalText);
             }
         }
 
@@ -443,7 +492,7 @@
 
         // ========== 页面加载完成提示 ==========
         window.addEventListener('load', () => {
-            console.log('AI小说写作工具已加载完成！');
+            console.log('AI小说写作工具已加载完成！请确保后端服务已启动');
         });
     </script>
 </body>
