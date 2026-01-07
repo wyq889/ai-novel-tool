@@ -251,6 +251,11 @@
     </div>
 
     <script>
+        // ========== 配置项 ==========
+        const API_KEY = 'sk-0974d18972c543419b645f6dfbf278cb'; // 你的API密钥
+        const API_URL = 'https://api.openai.com/v1/chat/completions'; // OpenAI API地址（可根据实际接口修改）
+        const MODEL = 'gpt-3.5-turbo'; // 使用的模型
+
         // ========== DOM元素获取 ==========
         const inspirationInput = document.getElementById('inspiration-input');
         const novelOutput = document.getElementById('novel-output');
@@ -263,10 +268,43 @@
         const copyContentBtn = document.getElementById('copy-content');
         const downloadTxtBtn = document.getElementById('download-txt');
 
-        // ========== 核心功能函数框架 ==========
+        // ========== 通用AI调用函数 ==========
         /**
-         * 生成精彩开头 - 函数框架
-         * 后续可接入AI API（如OpenAI、文心一言等）
+         * 调用AI API生成内容
+         * @param {string} prompt 提示词
+         * @returns {Promise<string>} AI生成的内容
+         */
+        async function callAIApi(prompt) {
+            const requestBody = {
+                model: MODEL,
+                messages: [
+                    { role: 'system', content: '你是一个专业的小说创作助手，擅长写各种风格的小说内容，语言优美，情节生动，符合中文阅读习惯。' },
+                    { role: 'user', content: prompt }
+                ],
+                temperature: 0.8, // 创作自由度，0-1之间，越高越有创意
+                max_tokens: 1000 // 最大生成字数
+            };
+
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${API_KEY}`
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error(`API请求失败：${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content.trim();
+        }
+
+        // ========== 核心功能函数 ==========
+        /**
+         * 生成精彩开头
          */
         async function generateBeginning() {
             const inputText = inspirationInput.value.trim();
@@ -274,24 +312,12 @@
                 alert('请先输入故事灵感！');
                 return;
             }
-            // 显示加载状态
+            
             novelOutput.value = 'AI正在生成精彩开头...请稍候...';
             try {
-                // ========== 后续接入AI API的核心逻辑 ==========
-                // 1. 构造请求参数（根据接入的AI接口要求调整）
-                // const prompt = `请根据以下灵感，生成一个精彩的小说开头（300-500字）：${inputText}`;
-                // 2. 调用AI API获取结果
-                // const response = await fetch('AI_API_URL', {
-                //     method: 'POST',
-                //     headers: { 'Content-Type': 'application/json' },
-                //     body: JSON.stringify({ prompt: prompt, api_key: 'YOUR_API_KEY' })
-                // });
-                // const data = await response.json();
-                // 3. 将结果显示到输出框
-                // novelOutput.value = data.result;
-
-                // 临时模拟结果（实际使用时删除）
-                novelOutput.value = `【精彩开头】\n\n${inputText}\n\n夜色如墨，浸染着这座名为「新铁城」的赛博朋克都市。霓虹灯管在雨幕中晕开一片片迷离的光斑，高楼大厦的玻璃幕墙上，不断闪烁着各种商业广告和通缉令。失忆的杀手林默靠在潮湿的巷口墙壁上，指尖传来的冰凉触感，让他混乱的大脑稍微清醒了一些。他的口袋里，除了一把上膛的电磁手枪，还有一个刻着陌生名字的金属牌——那是他唯一的身份线索。`;
+                const prompt = `请根据以下灵感，生成一个精彩的小说开头（300-500字），语言生动，有画面感，能够吸引读者：\n\n${inputText}`;
+                const result = await callAIApi(prompt);
+                novelOutput.value = `【精彩开头】\n\n${result}`;
             } catch (error) {
                 novelOutput.value = `生成失败！错误信息：${error.message}`;
                 console.error('生成开头失败：', error);
@@ -299,7 +325,7 @@
         }
 
         /**
-         * 续写后续情节 - 函数框架
+         * 续写后续情节
          */
         async function continuePlot() {
             const inputText = inspirationInput.value.trim();
@@ -308,11 +334,12 @@
                 alert('请先输入故事灵感并生成开头后，再进行续写！');
                 return;
             }
+            
             novelOutput.value = 'AI正在续写后续情节...请稍候...';
             try {
-                // ========== 后续接入AI API ==========
-                // 临时模拟结果
-                novelOutput.value += `\n\n【后续情节】\n\n就在林默试图回忆起自己身份的瞬间，一阵刺耳的警笛声由远及近。他下意识地缩了缩身子，将自己隐藏在阴影之中。巡逻的机械警犬迈着沉重的步伐从巷口经过，红色的扫描灯在雨幕中扫过，差一点就发现了他的踪迹。林默屏住呼吸，右手缓缓握住了腰间的手枪。他不知道自己为什么会被警察追捕，也不知道自己的过去究竟隐藏着怎样的秘密。但他清楚，现在必须尽快离开这里，否则等待他的，只会是无休止的追杀。`;
+                const prompt = `请根据以下故事灵感和已有的开头内容，续写后续情节（400-600字），情节连贯，符合逻辑，有吸引力：\n\n【故事灵感】\n${inputText}\n\n【已有内容】\n${outputText}\n\n【续写要求】保持风格统一，推进剧情发展`;
+                const result = await callAIApi(prompt);
+                novelOutput.value += `\n\n【后续情节】\n\n${result}`;
             } catch (error) {
                 novelOutput.value = `续写失败！错误信息：${error.message}`;
                 console.error('续写情节失败：', error);
@@ -320,7 +347,7 @@
         }
 
         /**
-         * 生成人物设定 - 函数框架
+         * 生成人物设定
          */
         async function generateCharacters() {
             const inputText = inspirationInput.value.trim();
@@ -328,11 +355,12 @@
                 alert('请先输入故事灵感！');
                 return;
             }
+            
             novelOutput.value = 'AI正在生成人物设定...请稍候...';
             try {
-                // ========== 后续接入AI API ==========
-                // 临时模拟结果
-                novelOutput.value = `【人物设定】\n\n1. 林默：男主角，25岁，失忆的顶尖杀手。身高182cm，体型精瘦，左眼角有一道浅浅的疤痕。性格冷漠寡言，但内心深处隐藏着对正义的渴望。能力：精通各种枪械和近身格斗术，意外获得了读取他人记忆的超能力。\n\n2. 苏晴：女主角，22岁，新铁城的实习记者。性格活泼开朗，充满正义感，对城市中的黑暗面深恶痛绝。偶然间救下了受伤的林默，从此卷入了一场巨大的阴谋之中。\n\n3. 夜枭：反派角色，35岁，新铁城最大黑帮「黑鸦会」的首领。心狠手辣，为了达到目的不择手段。一直在追杀林默，似乎与林默的过去有着密切的联系。`;
+                const prompt = `请根据以下故事灵感，生成详细的人物设定（至少3个主要角色），包括姓名、年龄、外貌、性格、能力、人物关系等，每个角色描述清晰具体：\n\n${inputText}`;
+                const result = await callAIApi(prompt);
+                novelOutput.value = `【人物设定】\n\n${result}`;
             } catch (error) {
                 novelOutput.value = `生成人物设定失败！错误信息：${error.message}`;
                 console.error('生成人物失败：', error);
@@ -340,7 +368,7 @@
         }
 
         /**
-         * 构思剧情爽点 - 函数框架
+         * 构思剧情爽点
          */
         async function plotHighlights() {
             const inputText = inspirationInput.value.trim();
@@ -348,11 +376,12 @@
                 alert('请先输入故事灵感！');
                 return;
             }
+            
             novelOutput.value = 'AI正在构思剧情爽点...请稍候...';
             try {
-                // ========== 后续接入AI API ==========
-                // 临时模拟结果
-                novelOutput.value = `【剧情爽点构思】\n\n1. 身份反转爽点：林默发现自己的真实身份是警方安插在黑鸦会的卧底，而夜枭正是他的直接上司。\n\n2. 能力觉醒爽点：在一次生死危机中，林默的记忆读取能力进化为记忆操控，能够修改他人的记忆，反杀追杀者。\n\n3. 打脸爽点：苏晴利用自己的记者身份，曝光了黑鸦会与警方高层的勾结，让夜枭身败名裂。\n\n4. 团战爽点：林默联合城市中的其他反抗力量，对黑鸦会的老巢发起总攻，最终将整个黑帮一网打尽。`;
+                const prompt = `请根据以下故事灵感，构思至少4个剧情爽点，每个爽点要有具体的场景和情节描述，符合网文读者的阅读喜好：\n\n${inputText}`;
+                const result = await callAIApi(prompt);
+                novelOutput.value = `【剧情爽点构思】\n\n${result}`;
             } catch (error) {
                 novelOutput.value = `构思爽点失败！错误信息：${error.message}`;
                 console.error('构思爽点失败：', error);
@@ -412,7 +441,7 @@
         copyContentBtn.addEventListener('click', copyContent);
         downloadTxtBtn.addEventListener('click', downloadTxt);
 
-        // ========== 页面加载完成提示（可选） ==========
+        // ========== 页面加载完成提示 ==========
         window.addEventListener('load', () => {
             console.log('AI小说写作工具已加载完成！');
         });
